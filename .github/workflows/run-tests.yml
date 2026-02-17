@@ -21,10 +21,17 @@ env:
   ENVIRONMENT: ${{ github.event.inputs.Environment }}
   CUSTOM_TEST: ${{ github.event.inputs.CustomTest }}
 
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
 jobs:
   run-tests:
     timeout-minutes: 5
     runs-on: ubuntu-latest
+    outputs:
+      report_uploaded: ${{ steps.upload-pages.outcome == 'success' }}
     steps:
 
       - name: Checkout
@@ -48,7 +55,7 @@ jobs:
         continue-on-error: true
         run: npx allure-commandline@2.29.0 generate ${{ env.ALLURE_RESULTS }} --clean -o allure-report
 
-      - name: Upload allure report
+      - name: Upload allure report (artifact)
         uses: actions/upload-artifact@v4
         if: always()
         continue-on-error: true
@@ -56,6 +63,13 @@ jobs:
           name: allure-report
           path: allure-report/
           retention-days: 1
+
+      - name: Upload Allure report for GitHub Pages
+        id: upload-pages
+        if: always() && hashFiles('allure-report/index.html') != ''
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: allure-report/
 
       - name: Upload Playwright report
         uses: actions/upload-artifact@v4
@@ -73,3 +87,18 @@ jobs:
           echo "| Report | Link |" >> $GITHUB_STEP_SUMMARY
           echo "|--------|------|" >> $GITHUB_STEP_SUMMARY
           echo "| Run | ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }} |" >> $GITHUB_STEP_SUMMARY
+          REPO_OWNER="${GITHUB_REPOSITORY%%/*}"
+          REPO_NAME="${GITHUB_REPOSITORY##*/}"
+          echo "| Allure report (after deploy) | https://${REPO_OWNER}.github.io/${REPO_NAME}/ |" >> $GITHUB_STEP_SUMMARY
+
+  deploy-report:
+    if: always() && needs.run-tests.outputs.report_uploaded == 'true'
+    needs: run-tests
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment: github-pages
+    steps:
+      - name: Deploy Allure report to GitHub Pages
+        uses: actions/deploy-pages@v4
