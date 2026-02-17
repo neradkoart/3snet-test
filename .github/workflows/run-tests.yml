@@ -44,6 +44,8 @@ jobs:
 
       - name: Generate allure report
         shell: bash
+        if: always()
+        continue-on-error: true
         run: allure generate ${{ env.ALLURE_RESULTS }} --clean -o allure-report
 
       - name: Upload allure report
