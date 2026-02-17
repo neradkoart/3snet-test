@@ -1,0 +1,73 @@
+name: Run Tests
+
+on:
+  workflow_dispatch:
+    inputs:
+      Environment:
+        type: choice
+        required: true
+        default: DEV
+        description: 3SNET environment
+        options:
+          - DEV
+      CustomTest:
+        type: string
+        required: false
+        default: ""
+        description: Custom test to run (example tests/events-widget/smokeEventsWidget.spec.ts)
+
+env:
+  ALLURE_RESULTS: "allure-results"
+  ENVIRONMENT: ${{ github.event.inputs.Environment }}
+  CUSTOM_TEST: ${{ github.event.inputs.CustomTest }}
+
+jobs:
+  run-tests:
+    timeout-minutes: 5
+    runs-on: ubuntu-latest
+    steps:
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        shell: bash
+        run: npm install
+
+      - name: Install playwright browsers with system deps
+        shell: bash
+        run: npx playwright install --with-deps chromium webkit
+
+      - name: Run tests
+        shell: bash
+        run: npm test ${{ env.CUSTOM_TEST }}
+
+      - name: Generate allure report
+        shell: bash
+        run: allure generate ${{ env.ALLURE_RESULTS }} --clean -o allure-report
+
+      - name: Upload allure report
+        uses: actions/upload-artifact@v4
+        if: always()
+        continue-on-error: true
+        with:
+          name: allure-report
+          path: allure-report/
+          retention-days: 1
+
+      - name: Upload Playwright report
+        uses: actions/upload-artifact@v4
+        if: always()
+        continue-on-error: true
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 1
+
+      - name: Publish Summary
+        if: always()
+        continue-on-error: true
+        run: |
+          echo "| Report | Link |" >> $GITHUB_STEP_SUMMARY
+          echo "|--------|------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Run | ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }} |" >> $GITHUB_STEP_SUMMARY

@@ -1,0 +1,1 @@
+export { EventsWidgetPage } from './EventsWidgetPage';
